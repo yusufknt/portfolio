@@ -5,8 +5,6 @@ import { useState } from "react";
 
 type Status = "idle" | "sending" | "success" | "error";
 
-const WEB3FORMS_ACCESS_KEY = process.env.NEXT_PUBLIC_WEB3FORMS_ACCESS_KEY?.trim() ?? "";
-
 export function ContactForm({ copy }: { copy: ContactFormCopy }) {
   const [status, setStatus] = useState<Status>("idle");
 
@@ -14,33 +12,24 @@ export function ContactForm({ copy }: { copy: ContactFormCopy }) {
     e.preventDefault();
     const form = e.currentTarget;
     setStatus("sending");
-    if (!WEB3FORMS_ACCESS_KEY) {
-      setStatus("error");
-      return;
-    }
+
     const fd = new FormData(form);
     const name = String(fd.get("name") ?? "").trim();
     const email = String(fd.get("email") ?? "").trim();
     const message = String(fd.get("message") ?? "").trim();
 
     try {
-      const body = new FormData();
-      body.set("access_key", WEB3FORMS_ACCESS_KEY);
-      body.set("name", name);
-      body.set("email", email);
-      body.set("message", message);
-      body.set("subject", `[Portfolio] ${name}`);
-      body.set("from_name", name);
-      body.set("replyto", email);
-
-      await fetch("https://api.web3forms.com/submit", {
+      const res = await fetch("/api/contact", {
         method: "POST",
-        mode: "no-cors",
-        body,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email, message }),
       });
 
-      // In no-cors mode browser does not expose response details.
-      // If request does not throw, treat delivery as successful.
+      if (!res.ok) {
+        setStatus("error");
+        return;
+      }
+
       setStatus("success");
       form.reset();
     } catch {
