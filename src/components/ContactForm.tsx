@@ -4,14 +4,18 @@ import type { ContactFormCopy } from "@/content/types";
 import { useState } from "react";
 
 type Status = "idle" | "sending" | "success" | "error";
+type Web3FormsResponse = { success?: boolean; message?: string };
+const WEB3FORMS_ACCESS_KEY = process.env.NEXT_PUBLIC_WEB3FORMS_ACCESS_KEY?.trim() ?? "";
 
 export function ContactForm({ copy }: { copy: ContactFormCopy }) {
   const [status, setStatus] = useState<Status>("idle");
+  const [errorHint, setErrorHint] = useState<string>("");
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = e.currentTarget;
     setStatus("sending");
+    setErrorHint("");
 
     const fd = new FormData(form);
     const name = String(fd.get("name") ?? "").trim();
@@ -19,13 +23,29 @@ export function ContactForm({ copy }: { copy: ContactFormCopy }) {
     const message = String(fd.get("message") ?? "").trim();
 
     try {
-      const res = await fetch("/api/contact", {
+      if (!WEB3FORMS_ACCESS_KEY) {
+        setErrorHint("Sunucu yapılandırması eksik (NEXT_PUBLIC_WEB3FORMS_ACCESS_KEY).");
+        setStatus("error");
+        return;
+      }
+
+      const body = new FormData();
+      body.set("access_key", WEB3FORMS_ACCESS_KEY);
+      body.set("name", name);
+      body.set("email", email);
+      body.set("message", message);
+      body.set("subject", `[Portfolio] ${name}`);
+      body.set("from_name", name);
+      body.set("replyto", email);
+
+      const res = await fetch("https://api.web3forms.com/submit", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, message }),
+        body,
       });
 
-      if (!res.ok) {
+      const payload = (await res.json()) as Web3FormsResponse;
+      if (!res.ok || payload.success === false) {
+        if (payload.message) setErrorHint(`Servis yanıtı: ${payload.message}`);
         setStatus("error");
         return;
       }
@@ -92,6 +112,7 @@ export function ContactForm({ copy }: { copy: ContactFormCopy }) {
         </button>
       </form>
       {msg ? <p className={`type-small mt-5 ${msgClass}`}>{msg}</p> : null}
+      {status === "error" && errorHint ? <p className="type-small mt-2 text-slate-400">{errorHint}</p> : null}
     </div>
   );
 }
